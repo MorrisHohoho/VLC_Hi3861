@@ -13,20 +13,21 @@
  * limitations under the License.
  */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-
-#include <hi_io.h>
+#include "car_control.h"
+#include "iot_adc.h"
+#include "iot_gpio_ex.h"
 
 #include "ohos_init.h"
 #include "cmsis_os2.h"
-#include "iot_gpio_ex.h"
 #include "iot_gpio.h"
-#include "iot_adc.h"
 #include "hi_adc.h"
 #include "iot_watchdog.h"
 #include "iot_errno.h"
+
+#include <hi_io.h>
+
+#include <stdio.h>
+#include <unistd.h>
 
 #define DEBUG 0
 
@@ -52,6 +53,8 @@ int highCount=0;            // 高电平计数
 unsigned int dataCounter=0; // 写入数据计数器
 
 
+// hi_u16 handShakeCount = 0; 
+
 void decode(const hi_u16 *encode, hi_u8*data)
 {
     int j=4;
@@ -70,12 +73,15 @@ void gpioInit()
 {
     IoTGpioInit(LED_TEST_GPIO);
     IoTGpioInit(PD_TEST_GPIO);
+    IoTGpioInit(IOT_IO_NAME_GPIO_2);
 
     IoSetFunc(LED_TEST_GPIO, IOT_IO_FUNC_GPIO_9_GPIO);
     IoSetFunc(PD_TEST_GPIO, IOT_IO_FUNC_GPIO_12_GPIO);
+    IoSetFunc(IOT_IO_NAME_GPIO_2,IOT_IO_FUNC_GPIO_2_GPIO);
 
     IoTGpioSetDir(LED_TEST_GPIO, IOT_GPIO_DIR_OUT);
     IoTGpioSetDir(LED_TEST_GPIO, IOT_GPIO_DIR_IN);
+    IoTGpioSetDir(IOT_IO_NAME_GPIO_2,IOT_GPIO_DIR_OUT);
 
     hi_io_set_pull(PD_TEST_GPIO, HI_IO_PULL_DOWN);
 }
@@ -93,6 +99,34 @@ hi_float getVlt()
     vlt = hi_adc_convert_to_voltage(data);
     return vlt;
 }
+
+// hi_bool handShake(const char* mes)
+// {
+//     if(strcmp(decodeData,"000000")==0 && handShakeCount==0)
+//     {
+//         printf("handShake 1");
+//         handShakeCount++;
+//         return HI_FALSE;
+//     }
+//     else if(strcmp(decodeData,"000001")==0 && handShakeCount == 1)
+//     {
+//         printf("handShake 2");
+//         handShakeCount++;
+//         return HI_FALSE;
+//     }
+//     else if(strcmp(decodeData,"000010")==0 && handShakeCount == 2)
+//     {
+//         printf("handShake 3");
+//         handShakeCount++;
+//         return HI_TRUE;
+//     }
+//     else
+//     {
+//         printf("handShake False!");
+//         handShakeCount=0;
+//         return HI_FALSE;
+//     }
+// }
 
 
 /* Convert Voltage to data of binary form.
@@ -240,19 +274,28 @@ void VlcTask()
 
             decode(reciveData,decodeData);
 
-            #if DEBUG
+            #if 1
             for(int i=0;i<VALID_MES_LEN;i++)
             printf("%c",decodeData[i]);
             printf("\n");
             #endif
 
-            if(strcmp(decodeData,"000000")==0)
-            IoTGpioSetOutputVal(LED_TEST_GPIO,IOT_GPIO_VALUE0);
-            else if(strcmp(decodeData,"000001")==0)
-            IoTGpioSetOutputVal(LED_TEST_GPIO,IOT_GPIO_VALUE1);
+            // hi_bool isConnected =  handShake(decodeData);
+            // if(isConnected)
+            // {
+            //     printf("VLC connected!\n\r");
+            //     printf("Do something Here!");
+            // }
+
+            hi_bool ret = ControlCar(decodeData);
+            if(!ret)
+            {
+                printf("ControlCar Error!");
+            }
 
 
             memset_s(reciveData, sizeof(reciveData), 0x0, sizeof(reciveData));
+            memset_s(decodeData,sizeof(decodeData),0x0,sizeof(decodeData));
             lowCount = 0;
             highCount = 0;
             dataCounter = 0;
@@ -285,6 +328,7 @@ void testTask()
     }
 }
 #endif
+
 
 static void VlcEntry(void)
 {

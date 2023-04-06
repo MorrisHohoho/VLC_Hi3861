@@ -1,10 +1,8 @@
-static_library("demo") {
-    sources = [
-        "PDv1.c",
-        "hal_iot_gpio_ex.c",
-        "hal_iot_adc.c",
-        "car_control.c",
-    ]
+static_library("motor_control") {
+  sources = [
+    "hal_iot_gpio_ex.c",
+    "motor_control.c",
+  ]
 
   include_dirs = [
     "./",
