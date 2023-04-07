@@ -25,6 +25,7 @@
 #include "iot_errno.h"
 
 #include <hi_io.h>
+#include <hi_clock.h>
 
 #include <stdio.h>
 #include <unistd.h>
@@ -39,21 +40,46 @@
 #define VALID_MES_LEN 6
 
 #define VLT_LOW 0.500  // 低电平阈值
-#define VLT_HIGH 1.200  // 高电平阈值
+#define VLT_HIGH 1.500  // 高电平阈值
 
 
 #define UP 1
 #define DOWN 0
 
+#define TIMER_PERIOD 10U
+
 hi_u16 reciveData[MES_LEN] = {0}; // 获取接收到的数据
 hi_s8 decodeData[VALID_MES_LEN]={0};
 
-int lowCount=0;             // 低电平计数
-int highCount=0;            // 高电平计数
-unsigned int dataCounter=0; // 写入数据计数器
+volatile int lowCount=0;             // 低电平计数
+volatile int highCount=0;            // 高电平计数
+volatile unsigned int dataCounter=0; // 写入数据计数器
+int lowThres = 0;      // “0”持续采样计数
+int highThres = 0;     // “1”持续采样计数
+volatile hi_bool highFlag = HI_FALSE; // 标记信息开始
+volatile hi_bool lowFlag = HI_FALSE;  // 标记LowThresHold划分完毕
+volatile hi_bool twoFlag = HI_FALSE;  // 标记HighThresHold划分完毕
 
 
-// hi_u16 handShakeCount = 0; 
+void InitArgs()
+{
+    memset_s(reciveData, sizeof(reciveData), 0x0, sizeof(reciveData));
+    memset_s(decodeData,sizeof(decodeData),0x0,sizeof(decodeData));
+    lowCount = 0;
+    highCount = 0;
+    dataCounter = 0;
+    lowThres = 0;
+    highThres = 0;
+    lowFlag = HI_FALSE;
+    highFlag = HI_FALSE;
+    twoFlag = HI_FALSE;
+}
+
+void Timer_Callback()
+{
+    printf("Timer_Callback\n");
+    InitArgs();
+}
 
 void decode(const hi_u16 *encode, hi_u8*data)
 {
@@ -134,6 +160,8 @@ hi_float getVlt()
 */
 void VlcTask()
 {
+    sleep(2);
+    printf("VlcTask Start!\n");
     hi_float vlt;
 
     int dir = UP; // 写入控制
@@ -142,11 +170,7 @@ void VlcTask()
     lowCount = 0;
     dataCounter = 0;
 
-    int lowThres = 0;      // “0”持续采样计数
-    int highThres = 0;     // “1”持续采样计数
-    hi_bool highFlag = HI_FALSE; // 标记信息开始
-    hi_bool lowFlag = HI_FALSE;  // 标记LowThresHold划分完毕
-    hi_bool twoFlag = HI_FALSE;  // 标记HighThresHold划分完毕
+    osTimerId_t id1 = osTimerNew(Timer_Callback, osTimerOnce, NULL, NULL);
 
     while (1)
     {
@@ -188,6 +212,10 @@ void VlcTask()
                     dataCounter++;
                     lowCount = 0;
                     twoFlag = HI_TRUE; // 启动HighThres划分
+                    if(osTimerStart(id1,TIMER_PERIOD)!=osOK)
+                    {
+                        printf("Timer Start Fail!\r");
+                    }
                 }
 
                 // 启动LowThres划分
@@ -293,17 +321,8 @@ void VlcTask()
                 printf("ControlCar Error!");
             }
 
+            InitArgs();
 
-            memset_s(reciveData, sizeof(reciveData), 0x0, sizeof(reciveData));
-            memset_s(decodeData,sizeof(decodeData),0x0,sizeof(decodeData));
-            lowCount = 0;
-            highCount = 0;
-            dataCounter = 0;
-            lowThres = 0;
-            highThres = 0;
-            lowFlag = HI_FALSE;
-            highFlag = HI_FALSE;
-            twoFlag = HI_FALSE;
         }
     }
 }
